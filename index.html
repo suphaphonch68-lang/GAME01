@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Code Match 3D - ห้องแล็บเชื่อมมิติโค้ด</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- GSAP Animation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Prompt', sans-serif;
+            background-color: #030712;
+            color: #f3f4f6;
+        }
+        .code-font {
+            font-family: 'Fira Code', monospace;
+        }
+        #webgl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .hud-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .interactive {
+            pointer-events: auto;
+        }
+        /* Custom UI Glassmorphism */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+        /* Animations */
+        @keyframes float-slow {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-8px) rotate(1deg); }
+        }
+        .animate-float {
+            animation: float-slow 4s ease-in-out infinite;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(99, 102, 241, 0.8); }
+        }
+        .glow-pulse {
+            animation: pulse-glow 2.5s infinite;
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+        ::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Canvas Background -->
+    <canvas id="webgl-canvas"></canvas>
+
+    <!-- HUD Overlay UI -->
+    <div class="hud-overlay flex flex-col justify-between p-4 md:p-6">
+        
+        <!-- Header Bar with Integrated Mission Info -->
+        <header class="w-full max-w-6xl mx-auto glass-panel rounded-2xl p-4 flex flex-col gap-3 interactive shadow-2xl transition-all duration-300">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-gradient-to-tr from-indigo-600 to-cyan-500 rounded-xl flex items-center justify-center text-2xl text-white shadow-lg shadow-indigo-500/40 glow-pulse">
+                        <i class="fa-solid fa-cube"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-xl md:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-indigo-300 to-pink-400">
+                            Cyber Code Match 3D
+                        </h1>
+                        <p class="text-xs text-indigo-300 font-medium" id="hud-level-title">ด่านที่ 1: รู้จักโค้ด (3D Spatial Match)</p>
+                    </div>
+                </div>
+
+                <!-- Score & Lives -->
+                <div class="flex items-center gap-6">
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">คะแนน</span>
+                        <div class="text-2xl md:text-3xl font-black text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.5)]" id="hud-score">0</div>
+                    </div>
+                    
+                    <div class="flex flex-col items-center">
+                        <span class="text-[10px] uppercase tracking-widest text-slate-400 font-bold">พลังชีวิต</span>
+                        <div class="flex gap-1.5 text-xl text-red-500" id="hud-hearts">
+                            <i class="fa-solid fa-heart drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]"></i>
+                            <i class="fa-solid fa-heart drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]"></i>
+                            <i class="fa-solid fa-heart drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dynamic Mission Instruction Bar (Attached in Top Header) -->
+            <div id="mission-bar" class="w-full pt-2 border-t border-slate-700/50 text-center transition-all duration-300">
+                <div class="text-[11px] font-bold uppercase tracking-widest text-cyan-400 mb-0.5 flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-crosshairs"></i> ภารกิจปัจจุบัน
+                </div>
+                <div id="mission-instruction" class="text-xs md:text-sm font-semibold text-white">
+                    คลิกเลือกการ์ด 3D ฝั่งซ้ายและฝั่งขวาเพื่อจับคู่โค้ดกับคำแปลความหมาย
+                </div>
+                <!-- Scenario Container for Level 4 -->
+                <div id="hud-scenario-box" class="hidden mt-2 p-2.5 bg-slate-900/90 rounded-xl border border-indigo-500/40 text-left text-xs md:text-sm text-slate-200">
+                    <span class="text-amber-400 font-bold"><i class="fa-solid fa-lightbulb mr-1"></i> โจทย์สถานการณ์:</span>
+                    <span id="hud-scenario-text" class="ml-1 font-medium text-cyan-200"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Progress Bar at bottom -->
+        <div class="w-full max-w-6xl mx-auto h-2 bg-slate-900/80 rounded-full overflow-hidden border border-slate-700/50">
+            <div id="hud-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-pink-500 w-0 transition-all duration-500 shadow-[0_0_12px_rgba(99,102,241,0.8)]"></div>
+        </div>
+
+        <!-- Side & Vertical Navigation Arrows -->
+        <button id="btn-pan-up-edge" title="เลื่อนมุมมองขึ้น (ลูกศรขึ้น / W)" class="absolute top-24 left-1/2 -translate-x-1/2 w-11 h-11 md:w-12 md:h-12 glass-panel hover:bg-indigo-600/60 text-cyan-300 rounded-2xl flex items-center justify-center text-lg font-bold border border-cyan-500/40 shadow-xl active:scale-95 transition cursor-pointer interactive z-20">
+            <i class="fa-solid fa-chevron-up"></i>
+        </button>
+        <button id="btn-pan-down-edge" title="เลื่อนมุมมองลง (ลูกศรลง / S)" class="absolute bottom-12 left-1/2 -translate-x-1/2 w-11 h-11 md:w-12 md:h-12 glass-panel hover:bg-indigo-600/60 text-cyan-300 rounded-2xl flex items-center justify-center text-lg font-bold border border-cyan-500/40 shadow-xl active:scale-95 transition cursor-pointer interactive z-20">
+            <i class="fa-solid fa-chevron-down"></i>
+        </button>
+        <button id="btn-pan-left-edge" title="เลื่อนมุมมองไปทางซ้าย (ลูกศรซ้าย / A)" class="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 md:w-13 md:h-13 glass-panel hover:bg-indigo-600/60 text-cyan-300 rounded-2xl flex items-center justify-center text-lg font-bold border border-cyan-500/40 shadow-xl active:scale-95 transition cursor-pointer interactive z-20">
+            <i class="fa-solid fa-chevron-left"></i>
+        </button>
+        <button id="btn-pan-right-edge" title="เลื่อนมุมมองไปทางขวา (ลูกศรขวา / D)" class="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 md:w-13 md:h-13 glass-panel hover:bg-indigo-600/60 text-cyan-300 rounded-2xl flex items-center justify-center text-lg font-bold border border-cyan-500/40 shadow-xl active:scale-95 transition cursor-pointer interactive z-20">
+            <i class="fa-solid fa-chevron-right"></i>
+        </button>
+
+        <!-- View & Zoom Controls Floating Bar -->
+        <div class="absolute bottom-6 right-6 flex flex-col gap-2 interactive z-20 items-center">
+            <!-- 4-Way Directional Controller -->
+            <div class="flex flex-col items-center gap-1">
+                <button id="btn-pan-up" title="เลื่อนมุมมองขึ้น" class="w-10 h-10 glass-panel hover:bg-indigo-600/50 text-cyan-300 rounded-xl flex items-center justify-center text-sm font-bold border border-cyan-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+                <div class="flex gap-1">
+                    <button id="btn-pan-left" title="เลื่อนมุมมองไปทางซ้าย" class="w-10 h-10 glass-panel hover:bg-indigo-600/50 text-cyan-300 rounded-xl flex items-center justify-center text-sm font-bold border border-cyan-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <button id="btn-zoom-reset" title="รีเซ็ตมุมมองและระยะซูม" class="w-10 h-10 glass-panel hover:bg-slate-700/50 text-slate-300 rounded-xl flex items-center justify-center text-xs font-bold border border-slate-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>
+                    <button id="btn-pan-right" title="เลื่อนมุมมองไปทางขวา" class="w-10 h-10 glass-panel hover:bg-indigo-600/50 text-cyan-300 rounded-xl flex items-center justify-center text-sm font-bold border border-cyan-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+                <button id="btn-pan-down" title="เลื่อนมุมมองลง" class="w-10 h-10 glass-panel hover:bg-indigo-600/50 text-cyan-300 rounded-xl flex items-center justify-center text-sm font-bold border border-cyan-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                    <i class="fa-solid fa-arrow-down"></i>
+                </button>
+            </div>
+            
+            <!-- Zoom Controls -->
+            <div class="flex gap-1 w-full justify-between mt-1">
+                <button id="btn-zoom-in" title="ขยายมุมมอง (+)" class="flex-1 h-9 glass-panel hover:bg-indigo-600/50 text-cyan-300 rounded-xl flex items-center justify-center text-sm font-bold border border-cyan-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button id="btn-zoom-out" title="ย่อมุมมอง (-)" class="flex-1 h-9 glass-panel hover:bg-indigo-600/50 text-cyan-300 rounded-xl flex items-center justify-center text-sm font-bold border border-cyan-500/30 shadow-lg active:scale-95 transition cursor-pointer">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Screen: Start Menu Overlay -->
+    <div id="screen-menu" class="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+        <div class="max-w-xl w-full glass-panel border border-indigo-500/30 rounded-3xl p-6 md:p-8 text-center shadow-2xl relative overflow-hidden animate-float">
+            <div class="absolute -top-24 -left-24 w-48 h-48 bg-indigo-600/30 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -bottom-24 -right-24 w-48 h-48 bg-cyan-600/30 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="w-16 h-16 md:w-20 md:h-20 mx-auto mb-3 bg-gradient-to-br from-indigo-500 to-cyan-400 rounded-2xl flex items-center justify-center text-3xl md:text-4xl text-white shadow-xl shadow-indigo-500/30">
+                <i class="fa-solid fa-cubes-stacked"></i>
+            </div>
+
+            <h2 class="text-2xl md:text-4xl font-black text-white mb-2 bg-clip-text text-transparent bg-gradient-to-r from-cyan-300 via-indigo-200 to-pink-300">
+                Cyber Code Match 3D
+            </h2>
+            <p class="text-slate-300 text-xs md:text-sm mb-4 leading-relaxed">
+                สำรวจห้องแล็บโปรแกรมเมอร์สามมิติ! วิเคราะห์ความสัมพันธ์ของคำสั่งการเขียนโปรแกรม<br>
+                <span class="text-cyan-400 font-bold">"โค้ด ➔ คำแปลภาษาไทย ➔ ประโยชน์ ➔ การนำไปใช้จริง"</span>
+            </p>
+
+            <!-- Instructions Box (วิธีเล่น) -->
+            <div class="bg-slate-900/90 rounded-2xl p-4 border border-indigo-500/20 text-left mb-6 text-xs md:text-sm text-slate-300 space-y-2">
+                <div class="text-cyan-400 font-bold text-center border-b border-slate-800 pb-2 mb-2 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-gamepad"></i> กติกาการเล่น & วิธีการเล่น
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-indigo-400 font-bold">1.</span>
+                    <span>คลิกเลือกการ์ด 3D เพื่อจับคู่ความสัมพันธ์ของคำสั่งโปรแกรมมิ่ง</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-indigo-400 font-bold">2.</span>
+                    <span><b>ด่านที่ 1–3:</b> จับคู่การ์ด 2 ใบ (โค้ด + คำแปล / ประโยชน์ / การใช้จริง)</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-indigo-400 font-bold">3.</span>
+                    <span><b>ด่านที่ 4:</b> อ่านโจทย์สถานการณ์แล้วจับคู่ 3 ใบที่สัมพันธ์กัน</span>
+                </div>
+                <div class="flex items-start gap-2">
+                    <span class="text-indigo-400 font-bold">4.</span>
+                    <span>ตอบถูก <span class="text-emerald-400 font-bold">+10 คะแนน</span> | ตอบผิด <span class="text-rose-400 font-bold">-5 คะแนน และเสียหัวใจ 1 ดวง</span></span>
+                </div>
+            </div>
+
+            <button id="btn-start-game" class="w-full md:w-auto px-10 py-3.5 bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-extrabold text-lg rounded-2xl shadow-xl shadow-indigo-500/40 transform transition hover:scale-105 active:scale-95 cursor-pointer">
+                เข้าสู่ห้องแล็บ 3D <i class="fa-solid fa-rocket ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Level Complete Overlay -->
+    <div id="screen-level-complete" class="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md hidden">
+        <div class="max-w-md w-full glass-panel border border-emerald-500/40 rounded-3xl p-8 text-center shadow-2xl">
+            <div class="w-20 h-20 mx-auto mb-4 bg-emerald-500/20 rounded-full flex items-center justify-center text-4xl text-emerald-400 shadow-lg shadow-emerald-500/30 animate-bounce">
+                <i class="fa-solid fa-award"></i>
+            </div>
+            <h2 class="text-3xl font-black text-white mb-2">ผ่านด่านสำเร็จ!</h2>
+            <p class="text-slate-300 text-sm mb-6" id="level-complete-desc">คุณเชื่อมโยงความรู้การเขียนโปรแกรมในมิติ 3D ได้สมบูรณ์แบบ</p>
+            
+            <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-700 mb-6">
+                <span class="text-xs text-slate-400 uppercase tracking-widest font-bold">คะแนนรวมปัจจุบัน</span>
+                <div class="text-4xl font-black text-amber-400" id="level-complete-score">0</div>
+            </div>
+
+            <button id="btn-next-level" class="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-lg rounded-xl shadow-lg shadow-emerald-600/30 transition transform hover:scale-102 active:scale-95 cursor-pointer">
+                ลุยด่านถัดไป <i class="fa-solid fa-arrow-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Victory Overlay -->
+    <div id="screen-victory" class="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md hidden">
+        <div class="max-w-lg w-full glass-panel border border-amber-500/40 rounded-3xl p-8 text-center shadow-2xl">
+            <div class="w-24 h-24 mx-auto mb-4 bg-amber-500/20 rounded-full flex items-center justify-center text-5xl text-amber-400 shadow-xl shadow-amber-500/30 animate-pulse">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+            <h2 class="text-3xl md:text-4xl font-black text-amber-300 mb-2">สุดยอดโปรแกรมเมอร์ 3D!</h2>
+            <p class="text-slate-300 text-sm mb-6">คุณเคลียร์ภารกิจวิชาการเขียนโปรแกรมครบทุกระดับชั้นแล้ว</p>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-700">
+                    <span class="text-xs text-slate-400 uppercase font-bold">คะแนนสูงสุด</span>
+                    <div class="text-3xl font-black text-cyan-400" id="victory-score">0</div>
+                </div>
+                <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-700">
+                    <span class="text-xs text-slate-400 uppercase font-bold">หัวใจคงเหลือ</span>
+                    <div class="text-3xl font-black text-red-500" id="victory-hearts">3</div>
+                </div>
+            </div>
+
+            <button onclick="location.reload()" class="w-full py-4 bg-gradient-to-r from-indigo-600 to-cyan-500 hover:from-indigo-500 hover:to-cyan-400 text-white font-bold text-lg rounded-2xl shadow-xl shadow-indigo-500/40 transition transform hover:scale-102 cursor-pointer">
+                เล่นใหม่อีกครั้ง <i class="fa-solid fa-rotate-right ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Screen: Game Over Overlay -->
+    <div id="screen-game-over" class="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md hidden">
+        <div class="max-w-md w-full glass-panel border border-rose-500/40 rounded-3xl p-8 text-center shadow-2xl">
+            <div class="w-20 h-20 mx-auto mb-4 bg-rose-500/20 rounded-full flex items-center justify-center text-4xl text-rose-500 shadow-lg shadow-rose-500/30">
+                <i class="fa-solid fa-heart-crack"></i>
+            </div>
+            <h2 class="text-3xl font-black text-white mb-2">พลังชีวิตหมดลง!</h2>
+            <p class="text-slate-300 text-sm mb-6">โปรแกรมเมอร์ที่ดีเรียนรู้จากข้อผิดพลาดเสมอ ลองวิเคราะห์และเริ่มใหม่อีกครั้งนะ!</p>
+            
+            <div class="bg-slate-900/90 p-4 rounded-2xl border border-slate-700 mb-6">
+                <span class="text-xs text-slate-400 uppercase font-bold">คะแนนที่ทำได้</span>
+                <div class="text-3xl font-black text-amber-400" id="game-over-score">0</div>
+            </div>
+
+            <button id="btn-restart-game" class="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-lg rounded-xl border border-slate-600 transition cursor-pointer">
+                <i class="fa-solid fa-rotate-right mr-2"></i> ลองอีกครั้ง
+            </button>
+        </div>
+    </div>
+
+    <!-- Detailed Educational Modal Overlay -->
+    <div id="modal-feedback" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md hidden transition-opacity duration-300">
+        <div id="modal-feedback-card" class="max-w-lg w-full bg-slate-900 border-2 rounded-3xl p-6 md:p-8 shadow-2xl transform transition-all duration-300 scale-95">
+            <div class="text-center mb-4">
+                <div id="modal-icon" class="text-5xl mb-2"></div>
+                <h3 id="modal-title" class="text-2xl font-black"></h3>
+            </div>
+
+            <!-- Thai Explanation Section -->
+            <div id="modal-explanation-box" class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 text-sm text-slate-200 leading-relaxed space-y-2 mb-6 max-h-[60vh] overflow-y-auto">
+                <!-- Content dynamically populated by JS -->
+            </div>
+
+            <button id="btn-close-modal" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition cursor-pointer">
+                เข้าใจแล้ว ทำภารกิจต่อ <i class="fa-solid fa-check ml-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const level1Data = [
+            {
+                id: "l1_c1",
+                topic: "ตัวแปรจำนวนเต็ม",
+                code: `int score = 80;`,
+                meaning: "สร้างตัวแปรชื่อ score ชนิดจำนวนเต็ม เก็บค่า 80",
+                benefit: "ช่วยเก็บข้อมูลตัวเลขไว้ใช้ประมวลผลหรือคำนวณในโปรแกรม",
+                example: "เก็บคะแนนสอบวิชาวิทยาการคำนวณของนักเรียน"
+            },
+            {
+                id: "l1_c2",
+                topic: "การแสดงข้อความ",
+                code: `printf("Hello!");`,
+                meaning: "แสดงข้อความ คำว่า Hello! ออกทางหน้าจอคอมพิวเตอร์",
+                benefit: "ช่วยให้โปรแกรมส่งข้อความสื่อสารกับผู้ใช้งานได้",
+                example: "แสดงคำต้อนรับผู้ใช้งานเมื่อเปิดแอปพลิเคชัน"
+            },
+            {
+                id: "l1_c3",
+                topic: "การรับค่าข้อมูล",
+                code: `scanf("%d", &age);`,
+                meaning: "รับค่าตัวเลขจำนวนเต็มจากแป้นพิมพ์มาเก็บในตัวแปร age",
+                benefit: "เปิดรับข้อมูลจากผู้ใช้เพื่อนำไปประมวลผลต่อตามต้องการ",
+                example: "รับป้อนอายุผู้ใช้เพื่อเช็กสิทธิ์เข้าระบบ"
+            },
+            {
+                id: "l1_c4",
+                topic: "การตรวจสอบเงื่อนไข",
+                code: `if (score >= 50)`,
+                meaning: "ตรวจสอบว่า ค่าใน score มากกว่าหรือเท่ากับ 50 หรือไม่",
+                benefit: "ช่วยให้โปรแกรมแยกทางเลือกการทำงานตามสถานการณ์ได้",
+                example: "ตรวจสอบเกณฑ์การสอบผ่านของนักเรียน"
+            }
+        ];
+
+        const level2Data = [
+            {
+                id: "l2_c1",
+                topic: "การวนซ้ำตามจำนวน",
+                code: `for (int i=1; i<=5; i++)`,
+                meaning: "วนซ้ำทำคำสั่งเดิม โดยเพิ่มค่า i จาก 1 ถึง 5 ทีละ 1",
+                benefit: "ลดการเขียนโค้ดซ้ำเดิมหลายบรรทัด ทำให้โปรแกรมสั้นกระชับ",
+                example: "พิมพ์ตารางแสดงลำดับที่ 1 ถึง 5 อัตโนมัติ"
+            },
+            {
+                id: "l2_c2",
+                topic: "ทางเลือกสองทาง",
+                code: `if (age >= 18)\n  printf("Adult");\nelse\n  printf("Child");`,
+                meaning: "ถ้าอายุ 18 ขึ้นไปแสดง Adult ถ้าไม่ใช่ให้แสดง Child",
+                benefit: "ช่วยกำหนดการตัดสินใจ 2 ทางเลือกที่ชัดเจนให้โปรแกรม",
+                example: "ระบบคัดกรองบัตรผ่านประตูผู้ใหญ่และเด็ก"
+            },
+            {
+                id: "l2_c3",
+                topic: "การคิดคำนวณ",
+                code: `int total = price - discount;`,
+                meaning: "นำราคาสินค้าลบส่วนลด แล้วเก็บผลลัพธ์ลงใน total",
+                benefit: "ช่วยประมวลผลคำนวณทางคณิตศาสตร์อย่างแม่นยำ",
+                example: "คำนวณยอดเงินสุทธิหลังหักส่วนลดร้านค้า"
+            },
+            {
+                id: "l2_c4",
+                topic: "ค่าคงที่ระบบ",
+                code: `const float VAT = 0.07;`,
+                meaning: "กำหนดค่าคงที่ VAT ให้เท่ากับ 0.07 (7%) ห้ามแก้ไข",
+                benefit: "ป้องกันไม่ให้โค้ดส่วนอื่นเผลอไปเปลี่ยนค่าสำคัญของระบบ",
+                example: "กำหนดอัตราภาษีมูลค่าเพิ่มของร้านค้า"
+            }
+        ];
+
+        const level3Data = [
+            {
+                id: "l3_c1",
+                topic: "วัดไข้อัตโนมัติ",
+                code: `if (temp > 37.5) {\n  alarm();\n}`,
+                meaning: "ถ้าอุณหภูมิร่างกายสูงเกิน 37.5 องศา ให้ส่งเสียงเตือน",
+                benefit: "ช่วยคัดกรองผู้มีไข้ได้แบบเรียลไทม์ไม่ต้องใช้คนเฝ้า",
+                example: "กล้องสแกนอุณหภูมิความร้อนหน้าประตูทางเข้าอาคาร"
+            },
+            {
+                id: "l3_c2",
+                topic: "ถอนเงินสด ATM",
+                code: `balance = balance - amount;`,
+                meaning: "นำยอดเงินคงเหลือลบด้วยจำนวนเงินที่ถอนออกไป",
+                benefit: "อัปเดตยอดเงินในบัญชีธนาคารให้ถูกต้องทันที",
+                example: "ระบบตู้หักยอดเงินบัญชีเมื่อลูกค้าถอนเงินสด"
+            },
+            {
+                id: "l3_c3",
+                topic: "นับถอยหลังชัตเตอร์",
+                code: `for (int s=3; s>0; s--) {\n  printf("%d..", s);\n}`,
+                meaning: "นับตัวเลขถอยหลังลดลงจาก 3 ถึง 1 ทีละ 1 วินาที",
+                benefit: "แจ้งเตือนให้ผู้ใช้งานเตรียมพร้อมก่อนระบบทำงาน",
+                example: "ระบบนับถอยหลัง 3 วินาทีก่อนกล้องถ่ายภาพทำงาน"
+            },
+            {
+                id: "l3_c4",
+                topic: "ปลดล็อกสมาร์ตโฟน",
+                code: `if (pin == inputPin) {\n  unlock();\n}`,
+                meaning: "ถ้ารหัส PIN ที่ตั้งไว้ตรงกับรหัสที่กรอก ให้ปลดล็อกหน้าจอ",
+                benefit: "รักษาความปลอดภัยและป้องกันผู้ไม่หวังดีเข้าถึงข้อมูล",
+                example: "ระบบยืนยันตัวตนด้วยรหัสผ่าน PIN บนมือถือ"
+            }
+        ];
+
+        const level4Scenarios = [
+            {
+                situation: "คุณต้องสร้างโปรแกรมคำนวณส่วนลดร้านค้า หากลูกค้าซื้อสินค้าครบ 500 บาท ให้ลดราคาให้ทันที 50 บาท",
+                targetId: "l4_c1"
+            },
+            {
+                situation: "คุณต้องทำระบบนับถอยหลังไฟเขียวสำหรับคนเดินข้ามถนน โดยให้นับจาก 10 ลงมาถึง 1 วินาที",
+                targetId: "l4_c2"
+            },
+            {
+                situation: "คุณกำลังสร้างเกมต่อสู้ เมื่อตัวละครเก็บขวดยาได้ ให้เพิ่มพลังชีวิต (HP) ขึ้นอีก 20 หน่วย",
+                targetId: "l4_c3"
+            }
+        ];
+
+        const level4Data = [
+            {
+                id: "l4_c1",
+                topic: "โปรโมชันร้านค้า",
+                code: `if (total >= 500) {\n  total = total - 50;\n}`,
+                meaning: "ถ้าซื้อครบ 500 บาท ให้หักลดราคาลง 50 บาททันที",
+                benefit: "ช่วยคำนวณเงื่อนไขส่วนลดโปรโมชันโดยอัตโนมัติ",
+                example: "ระบบแคชเชียร์คิดเงินร้านค้าปลีก"
+            },
+            {
+                id: "l4_c2",
+                topic: "นับถอยหลังไฟจราจร",
+                code: `for (int sec=10; sec>=1; sec--)`,
+                meaning: "วนซ้ำลดค่าเวลา sec จาก 10 ลงมาถึง 1 ทีละวินาที",
+                benefit: "สร้างจังหวะนับถอยหลังเวลาได้อย่างแม่นยำ",
+                example: "สัญญาณไฟเขียวบอกเวลาคนข้ามถนน"
+            },
+            {
+                id: "l4_c3",
+                topic: "ฟื้นฟูพลังในเกม",
+                code: `hp = hp + 20;`,
+                meaning: "นำค่า hp เดิมบวกเพิ่มอีก 20 แล้วบันทึกกลับลงตัวแปร hp",
+                benefit: "อัปเดตสถานะตัวละครในเกมเมื่อได้รับไอเทม",
+                example: "ระบบดื่มขวดยาเพิ่มพลังในเกม RPG"
+            }
+        ];
+
+        const allKnowledgeBase = [
+            ...level1Data,
+            ...level2Data,
+            ...level3Data,
+            ...level4Data
+        ];
+
+        let currentLevel = 1;
+        let score = 0;
+        let hearts = 3;
+        let selected3DCards = [];
+        let levelTargetMatches = 0;
+        let currentLevelMatches = 0;
+        let activeLevelData = [];
+
+        let scene, camera, renderer, raycaster, mouse;
+        let cardMeshes = [];
+        let connectingLines = [];
+        let particleSystems = [];
+        let hoveredMesh = null;
+
+        let targetCameraZ = 13;
+        let defaultLevelCameraZ = 13;
+        const minCameraZ = 6;
+        const maxCameraZ = 22;
+        let touchStartDist = 0;
+
+        let targetCameraX = 0;
+        const minCameraX = -9;
+        const maxCameraX = 9;
+
+        let targetCameraY = 0;
+        const minCameraY = -6;
+        const maxCameraY = 6;
+
+        let isPointerDragging = false;
+        let pointerStartX = 0;
+        let pointerStartY = 0;
+        let cameraStartX = 0;
+        let cameraStartY = 0;
+        let pointerMovedDistance = 0;
+
+        const canvasEl = document.getElementById('webgl-canvas');
+
+        function init3DEngine() {
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x030712, 0.035);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 13);
+
+            renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0x818cf8, 1.2);
+            dirLight.position.set(5, 10, 7);
+            scene.add(dirLight);
+
+            const cyanPointLight = new THREE.PointLight(0x06b6d4, 2, 20);
+            cyanPointLight.position.set(-8, -4, 5);
+            scene.add(cyanPointLight);
+
+            const purplePointLight = new THREE.PointLight(0xa855f7, 2, 20);
+            purplePointLight.position.set(8, 4, 5);
+            scene.add(purplePointLight);
+
+            const gridHelper = new THREE.GridHelper(30, 30, 0x3b82f6, 0x1e293b);
+            gridHelper.position.y = -6;
+            scene.add(gridHelper);
+
+            createBackgroundParticles();
+
+            window.addEventListener('resize', onWindowResize);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('wheel', onMouseWheel, { passive: false });
+            window.addEventListener('touchstart', onTouchStart, { passive: false });
+            window.addEventListener('touchmove', onTouchMove, { passive: false });
+            window.addEventListener('keydown', onKeyDown);
+
+            animate3D();
+        }
+
+        function panUp() {
+            targetCameraY = Math.min(maxCameraY, targetCameraY + 2.0);
+        }
+
+        function panDown() {
+            targetCameraY = Math.max(minCameraY, targetCameraY - 2.0);
+        }
+
+        function panLeft() {
+            targetCameraX = Math.max(minCameraX, targetCameraX - 2.5);
+        }
+
+        function panRight() {
+            targetCameraX = Math.min(maxCameraX, targetCameraX + 2.5);
+        }
+
+        function resetZoom() {
+            targetCameraZ = defaultLevelCameraZ;
+            targetCameraX = 0;
+            targetCameraY = 0;
+        }
+
+        function zoomIn() {
+            targetCameraZ = Math.max(minCameraZ, targetCameraZ - 2.5);
+        }
+
+        function zoomOut() {
+            targetCameraZ = Math.min(maxCameraZ, targetCameraZ + 2.5);
+        }
+
+        function onKeyDown(e) {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                panLeft();
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                panRight();
+            } else if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                panUp();
+            } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                panDown();
+            } else if (e.key === '+' || e.key === '=') {
+                zoomIn();
+            } else if (e.key === '-' || e.key === '_') {
+                zoomOut();
+            } else if (e.key === 'r' || e.key === 'R') {
+                resetZoom();
+            }
+        }
+
+        function onMouseWheel(event) {
+            event.preventDefault();
+            const zoomSpeed = 0.008;
+            targetCameraZ += event.deltaY * zoomSpeed;
+            targetCameraZ = Math.max(minCameraZ, Math.min(maxCameraZ, targetCameraZ));
+        }
+
+        function onTouchStart(event) {
+            if (event.touches.length === 2) {
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                touchStartDist = Math.hypot(dx, dy);
+            }
+        }
+
+        function onTouchMove(event) {
+            if (event.touches.length === 2 && touchStartDist > 0) {
+                event.preventDefault();
+                const dx = event.touches[0].clientX - event.touches[1].clientX;
+                const dy = event.touches[0].clientY - event.touches[1].clientY;
+                const dist = Math.hypot(dx, dy);
+                const delta = (touchStartDist - dist) * 0.02;
+
+                targetCameraZ += delta;
+                targetCameraZ = Math.max(minCameraZ, Math.min(maxCameraZ, targetCameraZ));
+                touchStartDist = dist;
+            }
+        }
+
+        function createBackgroundParticles() {
+            const particleCount = 120;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 30;
+                positions[i + 1] = (Math.random() - 0.5) * 20;
+                positions[i + 2] = (Math.random() - 0.5) * 20 - 5;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: 0x60a5fa,
+                size: 0.12,
+                transparent: true,
+                opacity: 0.6
+            });
+
+            const particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+        }
+
+        function createCardCanvasTexture(cardData, cardType) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 360;
+            const ctx = canvas.getContext('2d');
+
+            let primaryColor = '#3b82f6';
+            let bgGradientStart = '#0f172a';
+            let bgGradientEnd = '#1e1b4b';
+            let tagText = 'CODE';
+
+            if (cardType === 'meaning') {
+                primaryColor = '#fbbf24';
+                bgGradientStart = '#2f1a05';
+                bgGradientEnd = '#1c1003';
+                tagText = 'คำแปลความหมาย';
+            } else if (cardType === 'benefit') {
+                primaryColor = '#818cf8';
+                bgGradientStart = '#1e1b4b';
+                bgGradientEnd = '#0f172a';
+                tagText = 'ประโยชน์';
+            } else if (cardType === 'example') {
+                primaryColor = '#34d399';
+                bgGradientStart = '#022c22';
+                bgGradientEnd = '#064e3b';
+                tagText = 'การใช้งานจริง';
+            }
+
+            const grad = ctx.createLinearGradient(0, 0, 512, 360);
+            grad.addColorStop(0, bgGradientStart);
+            grad.addColorStop(1, bgGradientEnd);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 360);
+
+            ctx.lineWidth = 12;
+            ctx.strokeStyle = primaryColor;
+            ctx.strokeRect(6, 6, 500, 348);
+
+            ctx.fillStyle = primaryColor;
+            ctx.beginPath();
+            ctx.roundRect(24, 20, 160, 36, 18);
+            ctx.fill();
+
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 18px "Prompt", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(tagText, 104, 44);
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '500 18px "Prompt", sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText(cardData.topic || '', 480, 44);
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            let mainText = '';
+            if (cardType === 'code') mainText = cardData.code;
+            else if (cardType === 'meaning') mainText = cardData.meaning;
+            else if (cardType === 'benefit') mainText = cardData.benefit;
+            else if (cardType === 'example') mainText = cardData.example;
+
+            if (cardType === 'code') {
+                ctx.fillStyle = '#60a5fa';
+                ctx.font = 'bold 26px "Fira Code", monospace';
+            } else {
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = '500 22px "Prompt", sans-serif';
+            }
+
+            wrapCanvasText(ctx, mainText, 256, 190, 440, 34);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.needsUpdate = true;
+            return texture;
+        }
+
+        function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+            const lines = text.split('\n');
+            let allFormattedLines = [];
+
+            lines.forEach(line => {
+                const words = line.split(' ');
+                let currentLine = '';
+
+                for (let n = 0; n < words.length; n++) {
+                    let testLine = currentLine + words[n] + ' ';
+                    let metrics = ctx.measureText(testLine);
+                    let testWidth = metrics.width;
+                    if (testWidth > maxWidth && n > 0) {
+                        allFormattedLines.push(currentLine);
+                        currentLine = words[n] + ' ';
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                allFormattedLines.push(currentLine);
+            });
+
+            let startY = y - ((allFormattedLines.length - 1) * lineHeight) / 2;
+            for (let k = 0; k < allFormattedLines.length; k++) {
+                ctx.fillText(allFormattedLines[k].trim(), x, startY + (k * lineHeight));
+            }
+        }
+
+        function create3DCardsForLevel(leftList, rightList, centerList = null) {
+            cardMeshes.forEach(mesh => scene.remove(mesh));
+            cardMeshes = [];
+            clearConnectingLines();
+
+            const cardWidth = 2.4;
+            const cardHeight = 1.7;
+            const cardGeometry = new THREE.BoxGeometry(cardWidth, cardHeight, 0.12);
+
+            function spawnColumn(items, xPos) {
+                const total = items.length;
+                const startY = ((total - 1) * 2.1) / 2;
+
+                items.forEach((item, idx) => {
+                    const texture = createCardCanvasTexture(item.data, item.type);
+                    
+                    const sideMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+                    const frontMat = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.3, metalness: 0.1 });
+
+                    const materials = [sideMat, sideMat, sideMat, sideMat, frontMat, frontMat];
+                    const mesh = new THREE.Mesh(cardGeometry, materials);
+
+                    mesh.position.set(xPos, startY - (idx * 2.1), 0);
+                    mesh.userData = {
+                        id: item.data.id,
+                        type: item.type,
+                        cardData: item.data,
+                        originalX: xPos,
+                        originalY: startY - (idx * 2.1),
+                        isSelected: false,
+                        isMatched: false
+                    };
+
+                    mesh.position.z = -10;
+                    mesh.scale.set(0, 0, 0);
+                    gsap.to(mesh.position, { z: 0, duration: 0.8, delay: idx * 0.1, ease: "back.out(1.4)" });
+                    gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.8, delay: idx * 0.1, ease: "back.out(1.4)" });
+
+                    scene.add(mesh);
+                    cardMeshes.push(mesh);
+                });
+            }
+
+            if (centerList) {
+                spawnColumn(leftList, -4.2);
+                spawnColumn(centerList, 0);
+                spawnColumn(rightList, 4.2);
+                defaultLevelCameraZ = 15;
+            } else {
+                spawnColumn(leftList, -2.8);
+                spawnColumn(rightList, 2.8);
+                defaultLevelCameraZ = 13;
+            }
+            targetCameraZ = defaultLevelCameraZ;
+        }
+
+        function onPointerMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            if (isPointerDragging) {
+                const deltaX = event.clientX - pointerStartX;
+                const deltaY = event.clientY - pointerStartY;
+                pointerMovedDistance += Math.abs(deltaX) + Math.abs(deltaY);
+                const sensitivity = 0.012;
+                targetCameraX = Math.max(minCameraX, Math.min(maxCameraX, cameraStartX - deltaX * sensitivity));
+                targetCameraY = Math.max(minCameraY, Math.min(maxCameraY, cameraStartY + deltaY * sensitivity));
+            }
+
+            gsap.to(camera.rotation, {
+                y: -mouse.x * 0.08,
+                x: mouse.y * 0.08,
+                duration: 0.5
+            });
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(cardMeshes);
+
+            if (intersects.length > 0) {
+                const hitMesh = intersects[0].object;
+                if (!hitMesh.userData.isMatched) {
+                    document.body.style.cursor = 'pointer';
+                    if (hoveredMesh !== hitMesh) {
+                        if (hoveredMesh && !hoveredMesh.userData.isSelected) {
+                            resetMeshTransform(hoveredMesh);
+                        }
+                        hoveredMesh = hitMesh;
+                        if (!hoveredMesh.userData.isSelected) {
+                            gsap.to(hoveredMesh.position, { z: 0.6, duration: 0.2 });
+                            gsap.to(hoveredMesh.scale, { x: 1.06, y: 1.06, duration: 0.2 });
+                        }
+                    }
+                }
+            } else {
+                document.body.style.cursor = isPointerDragging ? 'grabbing' : 'default';
+                if (hoveredMesh && !hoveredMesh.userData.isSelected) {
+                    resetMeshTransform(hoveredMesh);
+                    hoveredMesh = null;
+                }
+            }
+        }
+
+        function resetMeshTransform(mesh) {
+            gsap.to(mesh.position, { x: mesh.userData.originalX, y: mesh.userData.originalY, z: 0, duration: 0.3 });
+            gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.3 });
+            gsap.to(mesh.rotation, { x: 0, y: 0, z: 0, duration: 0.3 });
+        }
+
+        function onPointerDown(event) {
+            isPointerDragging = true;
+            pointerStartX = event.clientX;
+            pointerStartY = event.clientY;
+            cameraStartX = targetCameraX;
+            cameraStartY = targetCameraY;
+            pointerMovedDistance = 0;
+        }
+
+        function onPointerUp(event) {
+            isPointerDragging = false;
+            document.body.style.cursor = 'default';
+
+            if (pointerMovedDistance < 10) {
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(cardMeshes);
+
+                if (intersects.length > 0) {
+                    const clickedMesh = intersects[0].object;
+                    if (clickedMesh.userData.isMatched) return;
+
+                    const clickedType = clickedMesh.userData.type;
+
+                    const existingIdx = selected3DCards.findIndex(m => m.userData.type === clickedType);
+                    if (existingIdx !== -1) {
+                        const oldMesh = selected3DCards[existingIdx];
+                        oldMesh.userData.isSelected = false;
+                        resetMeshTransform(oldMesh);
+                        selected3DCards.splice(existingIdx, 1);
+                    }
+
+                    clickedMesh.userData.isSelected = true;
+                    selected3DCards.push(clickedMesh);
+
+                    gsap.to(clickedMesh.position, { z: 1.0, duration: 0.3 });
+                    gsap.to(clickedMesh.scale, { x: 1.1, y: 1.1, duration: 0.3 });
+
+                    updateConnecting3DLines();
+
+                    if (currentLevel < 4 && selected3DCards.length === 2) {
+                        evaluateMatch2Cards();
+                    } else if (currentLevel === 4 && selected3DCards.length === 3) {
+                        evaluateMatch3Cards();
+                    }
+                }
+            }
+        }
+
+        function updateConnecting3DLines() {
+            clearConnectingLines();
+            if (selected3DCards.length < 2) return;
+
+            for (let i = 0; i < selected3DCards.length - 1; i++) {
+                const p1 = selected3DCards[i].position;
+                const p2 = selected3DCards[i + 1].position;
+
+                const points = [p1, p2];
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({
+                    color: 0x38bdf8,
+                    linewidth: 4,
+                    transparent: true,
+                    opacity: 0.9
+                });
+
+                const line = new THREE.Line(geometry, material);
+                scene.add(line);
+                connectingLines.push(line);
+            }
+        }
+
+        function clearConnectingLines() {
+            connectingLines.forEach(l => scene.remove(l));
+            connectingLines = [];
+        }
+
+        function evaluateMatch2Cards() {
+            const mesh1 = selected3DCards[0];
+            const mesh2 = selected3DCards[1];
+
+            const id1 = mesh1.userData.id;
+            const id2 = mesh2.userData.id;
+
+            if (id1 === id2) {
+                score += 10;
+                currentLevelMatches++;
+                updateHUD();
+
+                const midX = (mesh1.position.x + mesh2.position.x) / 2;
+                const midY = (mesh1.position.y + mesh2.position.y) / 2;
+                spawnMatchParticles(midX, midY, 0x22c55e);
+
+                [mesh1, mesh2].forEach(m => {
+                    m.userData.isMatched = true;
+                    gsap.to(m.rotation, { y: Math.PI * 2, duration: 0.6 });
+                    gsap.to(m.scale, { x: 0, y: 0, z: 0, duration: 0.6, delay: 0.4 });
+                });
+
+                setTimeout(() => {
+                    clearConnectingLines();
+                    selected3DCards = [];
+                    showFeedbackModal(true, id1);
+
+                    if (currentLevelMatches === levelTargetMatches) {
+                        setTimeout(handleLevelVictory, 600);
+                    }
+                }, 800);
+
+            } else {
+                score = Math.max(0, score - 5);
+                hearts--;
+                updateHUD();
+
+                spawnMatchParticles(0, 0, 0xef4444);
+
+                gsap.to(camera.position, { x: "+=0.3", yoyo: true, repeat: 5, duration: 0.05 });
+
+                [mesh1, mesh2].forEach(m => {
+                    gsap.to(m.position, { x: "+=0.2", yoyo: true, repeat: 5, duration: 0.05, onComplete: () => {
+                        m.userData.isSelected = false;
+                        resetMeshTransform(m);
+                    }});
+                });
+
+                setTimeout(() => {
+                    clearConnectingLines();
+                    selected3DCards = [];
+                    showFeedbackModal(false, id1, id2);
+
+                    if (hearts <= 0) {
+                        setTimeout(() => showScreen('gameOver'), 600);
+                    }
+                }, 800);
+            }
+        }
+
+        function evaluateMatch3Cards() {
+            const targetId = activeLevelData.targetId;
+            const m1 = selected3DCards[0];
+            const m2 = selected3DCards[1];
+            const m3 = selected3DCards[2];
+
+            const isCorrect = (m1.userData.id === targetId && m2.userData.id === targetId && m3.userData.id === targetId);
+
+            if (isCorrect) {
+                score += 20;
+                updateHUD();
+                spawnMatchParticles(0, 0, 0xfbbf24);
+
+                [m1, m2, m3].forEach(m => {
+                    m.userData.isMatched = true;
+                    gsap.to(m.rotation, { y: Math.PI * 2, duration: 0.6 });
+                    gsap.to(m.scale, { x: 0, y: 0, z: 0, duration: 0.6, delay: 0.4 });
+                });
+
+                setTimeout(() => {
+                    clearConnectingLines();
+                    selected3DCards = [];
+                    showFeedbackModal(true, targetId, null, true);
+                }, 800);
+
+            } else {
+                score = Math.max(0, score - 5);
+                hearts--;
+                updateHUD();
+
+                gsap.to(camera.position, { x: "+=0.3", yoyo: true, repeat: 5, duration: 0.05 });
+
+                [m1, m2, m3].forEach(m => {
+                    gsap.to(m.position, { x: "+=0.2", yoyo: true, repeat: 5, duration: 0.05, onComplete: () => {
+                        m.userData.isSelected = false;
+                        resetMeshTransform(m);
+                    }});
+                });
+
+                setTimeout(() => {
+                    clearConnectingLines();
+                    selected3DCards = [];
+                    showFeedbackModal(false, null, null, true);
+
+                    if (hearts <= 0) {
+                        setTimeout(() => showScreen('gameOver'), 600);
+                    }
+                }, 800);
+            }
+        }
+
+        function spawnMatchParticles(x, y, hexColor) {
+            const count = 40;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(count * 3);
+            const velocities = [];
+
+            for (let i = 0; i < count; i++) {
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = 1;
+
+                velocities.push({
+                    x: (Math.random() - 0.5) * 0.2,
+                    y: (Math.random() - 0.5) * 0.2,
+                    z: (Math.random() - 0.5) * 0.2
+                });
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({ color: hexColor, size: 0.2, transparent: true, opacity: 1 });
+            const pSystem = new THREE.Points(geometry, material);
+            pSystem.userData = { velocities, life: 1.0 };
+
+            scene.add(pSystem);
+            particleSystems.push(pSystem);
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+
+            camera.position.z += (targetCameraZ - camera.position.z) * 0.1;
+            camera.position.x += (targetCameraX - camera.position.x) * 0.1;
+            camera.position.y += (targetCameraY - camera.position.y) * 0.1;
+
+            const time = Date.now() * 0.002;
+            cardMeshes.forEach((mesh, idx) => {
+                if (!mesh.userData.isSelected && !mesh.userData.isMatched) {
+                    mesh.position.y = mesh.userData.originalY + Math.sin(time + idx) * 0.08;
+                }
+            });
+
+            for (let i = particleSystems.length - 1; i >= 0; i--) {
+                const pSys = particleSystems[i];
+                pSys.userData.life -= 0.02;
+                if (pSys.userData.life <= 0) {
+                    scene.remove(pSys);
+                    particleSystems.splice(i, 1);
+                } else {
+                    pSys.material.opacity = pSys.userData.life;
+                    const pos = pSys.geometry.attributes.position.array;
+                    const vels = pSys.userData.velocities;
+                    for (let j = 0; j < vels.length; j++) {
+                        pos[j * 3] += vels[j].x;
+                        pos[j * 3 + 1] += vels[j].y;
+                        pos[j * 3 + 2] += vels[j].z;
+                    }
+                    pSys.geometry.attributes.position.needsUpdate = true;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex != 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function setupLevel(level) {
+            currentLevel = level;
+            currentLevelMatches = 0;
+            selected3DCards = [];
+            targetCameraX = 0;
+            targetCameraY = 0;
+            updateHUD();
+
+            const hudScenarioBox = document.getElementById('hud-scenario-box');
+            hudScenarioBox.classList.add('hidden');
+
+            const missionInstruction = document.getElementById('mission-instruction');
+
+            if (level === 1) {
+                levelTargetMatches = 4;
+                activeLevelData = shuffle([...level1Data]);
+                document.getElementById('hud-level-title').textContent = "ด่านที่ 1: รู้จักโค้ด (Code ➔ Translation)";
+                missionInstruction.textContent = "จับคู่ [การ์ดโค้ด] ฝั่งซ้าย ให้ตรงกับ [คำแปลภาษาไทย] ฝั่งขวา";
+
+                const left = activeLevelData.map(d => ({ type: 'code', data: d }));
+                const right = shuffle(activeLevelData.map(d => ({ type: 'meaning', data: d })));
+                create3DCardsForLevel(left, right);
+
+            } else if (level === 2) {
+                levelTargetMatches = 4;
+                activeLevelData = shuffle([...level2Data]);
+                document.getElementById('hud-level-title').textContent = "ด่านที่ 2: เข้าใจประโยชน์ (Code ➔ Benefit)";
+                missionInstruction.textContent = "จับคู่ [การ์ดโค้ด] ฝั่งซ้าย ให้ตรงกับ [ประโยชน์] ฝั่งขวา";
+
+                const left = activeLevelData.map(d => ({ type: 'code', data: d }));
+                const right = shuffle(activeLevelData.map(d => ({ type: 'benefit', data: d })));
+                create3DCardsForLevel(left, right);
+
+            } else if (level === 3) {
+                levelTargetMatches = 4;
+                activeLevelData = shuffle([...level3Data]);
+                document.getElementById('hud-level-title').textContent = "ด่านที่ 3: โค้ดในชีวิตจริง (Code ➔ Real Life)";
+                missionInstruction.textContent = "จับคู่ [การ์ดโค้ด] ฝั่งซ้าย ให้ตรงกับ [สถานการณ์นำไปใช้จริง] ฝั่งขวา";
+
+                const left = activeLevelData.map(d => ({ type: 'code', data: d }));
+                const right = shuffle(activeLevelData.map(d => ({ type: 'example', data: d })));
+                create3DCardsForLevel(left, right);
+
+            } else if (level === 4) {
+                levelTargetMatches = 1;
+                const scenario = level4Scenarios[Math.floor(Math.random() * level4Scenarios.length)];
+                activeLevelData = { scenario, targetId: scenario.targetId };
+
+                document.getElementById('hud-level-title').textContent = "ด่านที่ 4: ภารกิจโปรแกรมเมอร์ (3D Triplet Match)";
+                missionInstruction.textContent = "อ่านโจทย์สถานการณ์ แล้วเลือกการ์ด 3 ใบให้ตรงกัน (โค้ด + คำแปล + การใช้งาน)";
+                
+                document.getElementById('hud-scenario-text').textContent = scenario.situation;
+                hudScenarioBox.classList.remove('hidden');
+
+                const pool = [...level4Data];
+                const col1 = shuffle(pool.map(d => ({ type: 'code', data: d })));
+                const col2 = shuffle(pool.map(d => ({ type: 'meaning', data: d })));
+                const col3 = shuffle(pool.map(d => ({ type: 'example', data: d })));
+
+                create3DCardsForLevel(col1, col3, col2);
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('hud-score').textContent = score;
+
+            const heartsContainer = document.getElementById('hud-hearts');
+            heartsContainer.innerHTML = '';
+            for (let i = 0; i < 3; i++) {
+                if (i < hearts) {
+                    heartsContainer.innerHTML += `<i class="fa-solid fa-heart drop-shadow-[0_0_8px_rgba(239,68,68,0.6)]"></i>`;
+                } else {
+                    heartsContainer.innerHTML += `<i class="fa-solid fa-heart-crack text-slate-700"></i>`;
+                }
+            }
+
+            const progressPercent = ((currentLevel - 1) / 4) * 100 + (currentLevelMatches / levelTargetMatches) * 25;
+            document.getElementById('hud-progress-bar').style.width = `${progressPercent}%`;
+        }
+
+        function showScreen(screenId) {
+            ['screen-menu', 'screen-level-complete', 'screen-victory', 'screen-game-over'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            if (screenId) {
+                document.getElementById(`screen-${screenId}`).classList.remove('hidden');
+            }
+        }
+
+        function showFeedbackModal(isCorrect, id1, id2 = null, isLevel4 = false) {
+            const modal = document.getElementById('modal-feedback');
+            const card = document.getElementById('modal-feedback-card');
+            const icon = document.getElementById('modal-icon');
+            const title = document.getElementById('modal-title');
+            const box = document.getElementById('modal-explanation-box');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => card.classList.remove('scale-95'), 10);
+
+            if (isCorrect) {
+                const data = allKnowledgeBase.find(d => d.id === id1);
+                card.className = 'max-w-lg w-full bg-slate-900 border-2 border-emerald-500 rounded-3xl p-6 md:p-8 shadow-[0_0_40px_rgba(16,185,129,0.3)] transform transition-all duration-300';
+                icon.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i>`;
+                title.innerHTML = `<span class="text-emerald-400">ถูกต้องแล้ว! 🎉</span>`;
+
+                box.innerHTML = `
+                    <div class="font-bold text-base text-cyan-300 mb-2">เรื่อง: ${data.topic}</div>
+                    <div class="mb-2"><span class="font-bold text-blue-400">โค้ด:</span> <code class="bg-slate-950 px-2 py-0.5 rounded text-cyan-200 code-font">${data.code}</code></div>
+                    <div class="mb-2"><span class="font-bold text-amber-400">คำแปลภาษาไทย:</span> ${data.meaning}</div>
+                    <div class="mb-2"><span class="font-bold text-indigo-400">ประโยชน์:</span> ${data.benefit}</div>
+                    <div><span class="font-bold text-emerald-400">ตัวอย่างใช้จริง:</span> ${data.example}</div>
+                `;
+
+            } else {
+                card.className = 'max-w-lg w-full bg-slate-900 border-2 border-rose-500 rounded-3xl p-6 md:p-8 shadow-[0_0_40px_rgba(244,63,94,0.3)] transform transition-all duration-300';
+                icon.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-500"></i>`;
+                title.innerHTML = `<span class="text-rose-500">ยังไม่ถูกต้องนะ 🤔</span>`;
+
+                if (isLevel4) {
+                    box.innerHTML = `ชุดการ์ดที่คุณเลือกยังไม่ตรงกับโจทย์สถานการณ์ที่กำหนด ลองวิเคราะห์การทำงานของโค้ดให้สอดคล้องกับโจทย์อีกครั้งนะครับ`;
+                } else {
+                    const d1 = allKnowledgeBase.find(d => d.id === id1);
+                    const d2 = allKnowledgeBase.find(d => d.id === id2);
+                    if (d1 && d2) {
+                        box.innerHTML = `
+                            คุณจับคู่ของ <span class="text-cyan-400 font-bold">${d1.topic}</span> กับของ <span class="text-amber-400 font-bold">${d2.topic}</span> ซึ่งยังไม่เข้ากัน<br><br>
+                            <b>เกร็ดความรู้ทบทวน:</b><br>
+                            คำสั่ง <code class="code-font text-blue-300">${d1.code}</code> แปลว่า:<br>
+                            "${d1.meaning}"
+                        `;
+                    } else {
+                        box.innerHTML = `ความหมายของการ์ดสองใบนี้ยังไม่ตรงกัน ลองสังเกตบทบาทหน้าที่ของตัวคำสั่งดูใหม่อีกครั้งนะครับ`;
+                    }
+                }
+            }
+
+            modal.dataset.isNext = (isCorrect && currentLevelMatches === levelTargetMatches) ? 'true' : 'false';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('modal-feedback');
+            modal.classList.add('hidden');
+
+            if (modal.dataset.isNext === 'true') {
+                handleLevelVictory();
+            }
+        }
+
+        function handleLevelVictory() {
+            if (currentLevel < 4) {
+                document.getElementById('level-complete-score').textContent = score;
+                showScreen('level-complete');
+            } else {
+                document.getElementById('victory-score').textContent = score;
+                document.getElementById('victory-hearts').textContent = hearts;
+                showScreen('victory');
+            }
+        }
+
+        window.onload = () => {
+            init3DEngine();
+
+            document.getElementById('btn-pan-up').addEventListener('click', panUp);
+            document.getElementById('btn-pan-down').addEventListener('click', panDown);
+            document.getElementById('btn-pan-up-edge').addEventListener('click', panUp);
+            document.getElementById('btn-pan-down-edge').addEventListener('click', panDown);
+            document.getElementById('btn-pan-left').addEventListener('click', panLeft);
+            document.getElementById('btn-pan-right').addEventListener('click', panRight);
+            document.getElementById('btn-pan-left-edge').addEventListener('click', panLeft);
+            document.getElementById('btn-pan-right-edge').addEventListener('click', panRight);
+
+            document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
+            document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
+            document.getElementById('btn-zoom-reset').addEventListener('click', resetZoom);
+
+            document.getElementById('btn-start-game').addEventListener('click', () => {
+                showScreen(null);
+                setupLevel(1);
+            });
+
+            document.getElementById('btn-next-level').addEventListener('click', () => {
+                showScreen(null);
+                setupLevel(currentLevel + 1);
+            });
+
+            document.getElementById('btn-restart-game').addEventListener('click', () => {
+                score = 0;
+                hearts = 3;
+                showScreen(null);
+                setupLevel(1);
+            });
+
+            document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+        };
+    </script>
+</body>
+</html>
